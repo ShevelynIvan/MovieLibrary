@@ -1,96 +1,69 @@
-﻿namespace MovieLibrary.Movies
-{
-    public class MovieLib
-    {
-        private string[] _ordinaryMovies = { "1", "2", "3", "4" };
-        private string[] _onlyAdultMovies = { "1a", "2a", "3a", "4a" };
+﻿using System.Collections;
+using MoviesDAL.Models;
+using MoviesDAL.EF;
 
-        /// <summary>
-        /// Number of all movies
-        /// </summary>
-        private int _length;
+namespace MovieLibrary.Movies
+{
+    public class MovieLib : IEnumerable<Movie>
+    {
+        private Dictionary<int, Movie> _ordinaryMovies = new Dictionary<int, Movie>();
+        private Dictionary<int, Movie> _onlyAdultMovies = new Dictionary<int, Movie>();
 
         private TimeSpan _begin; 
         private TimeSpan _end; 
 
-        public MovieLib()
+        /// <summary>
+        /// Constructor to take movies from DB
+        /// </summary>
+        /// <param name="context">Db context to take movies from db</param>
+        public MovieLib(MovieDbContext context)
         {
-            _length = _ordinaryMovies.Length + _onlyAdultMovies.Length;
+            foreach (var movie in context.Movies) 
+            {
+                if (movie.IsAdult)
+                    _onlyAdultMovies.Add(movie.Id, movie);
+                else
+                    _ordinaryMovies.Add(movie.Id, movie);
+            }
+
             _begin = TimeSpan.FromHours(7);
             _end = TimeSpan.FromHours(23);
         }
 
-        public string this[int index]
+        public Movie? this[int article]
         {
-            get
-            {
-                if (IsTimeToAllMovies())
-                {
-                    if (IsIndexOfAdultMovie(index))
-                        return _onlyAdultMovies[index - _ordinaryMovies.Length];
-
-                    else if (IsIndexNotOutOfOrdinaryMovies(index))
-                        return _ordinaryMovies[index];
-
-                    else
-                        return "";
-                }
-                else
-                {
-                    if (IsIndexNotOutOfOrdinaryMovies(index))
-                        return _ordinaryMovies[index];
-
-                    else
-                        return "";
-                }
-            }
-            set
-            {
-                if (IsTimeToAllMovies())
-                {
-                    if (IsIndexOfAdultMovie(index))
-                        _onlyAdultMovies[index - _ordinaryMovies.Length] = value;
-
-                    else if (IsIndexNotOutOfOrdinaryMovies(index))
-                        _ordinaryMovies[index] = value;
-                }
-                else
-                {
-                    if (IsIndexNotOutOfOrdinaryMovies(index))
-                        _ordinaryMovies[index] = value;
-                }
-            }
+            get => GetMovie(article);
         }
 
         /// <summary>
-        /// Gets movie from appropriate index
+        /// Gets movie from appropriate article
         /// </summary>
-        /// <param name="movieNum">Index of movie</param>
-        /// <returns>String movie from appropriate index</returns>
-        public string GetMovie(int movieNum)
+        /// <param name="movieNum">Article of movie</param>
+        /// <returns>Movie object from appropriate artcile. Returns null if it doesn't exist</returns>
+        public Movie? GetMovie(int article)
         {
-            if (IsTimeToAllMovies())
+            if (!IsTimeToAllMovies())
             {
-                if (IsIndexOfAdultMovie(movieNum))
-                    return _onlyAdultMovies[movieNum - _ordinaryMovies.Length];
-
-                else if (IsIndexNotOutOfOrdinaryMovies(movieNum))
-                    return _ordinaryMovies[movieNum];
-
-                else
-                    return "";
+                if (_ordinaryMovies.ContainsKey(article))
+                {
+                    return _ordinaryMovies[article];
+                }
             }
             else
             {
-                if (IsIndexNotOutOfOrdinaryMovies(movieNum))
-                    return _ordinaryMovies[movieNum];
-
-                else
-                    return "";
+                if (_ordinaryMovies.ContainsKey(article))
+                {
+                    return _ordinaryMovies[article];
+                }
+                if (_onlyAdultMovies.ContainsKey(article))
+                {
+                    return _onlyAdultMovies[article];
+                }
             }
+
+            return null;
         }
 
-        #region Validations
         /// <summary>
         /// Checks the time and returns instructions on which movies can be shown
         /// </summary>
@@ -105,34 +78,23 @@
             return true;
         }
 
-        /// <summary>
-        /// Checks the index for membership to Adult movies
-        /// </summary>
-        /// <param name="index">Index of movie</param>
-        /// <returns>True - if it's adult movie. False - if it isn't</returns>
-        private bool IsIndexOfAdultMovie(int index)
+        public IEnumerator<Movie> GetEnumerator()
         {
-            if (index >= _ordinaryMovies.Length && index < _length)
-                return true;
-            
-            return false;
+            if (!IsTimeToAllMovies())
+            {
+                return new MovieEnumerator(_ordinaryMovies.Values.ToList());
+            }
+            else
+            {
+                var allMovies = _ordinaryMovies.Values.ToList();
+                allMovies.AddRange(_onlyAdultMovies.Values.ToList());
+                return new MovieEnumerator(allMovies);
+            }
         }
 
-        /// <summary>
-        /// Checks the index for membership to Ordinary movies
-        /// </summary>
-        /// <param name="index">Index of movie</param>
-        /// <returns>True - if it's ordinary movie. False - if it isn't</returns>
-        private bool IsIndexNotOutOfOrdinaryMovies(int index)
+        IEnumerator IEnumerable.GetEnumerator()
         {
-            if ((index < _ordinaryMovies.Length) && (index >= 0))
-                return true;
-
-            return false;
+            return GetEnumerator();
         }
-        #endregion
-
-        public IEnumerator<string> GetEnumerator() 
-            => new MovieEnumerator(_ordinaryMovies, _onlyAdultMovies, DateTime.Now.TimeOfDay, _begin, _end);
     }
 }
